@@ -4,38 +4,61 @@
   <meta charset="UTF-8" />
   <title>Tenant Group Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
+    body { background: #f1f2f6; }
+    .chat-container {
+      max-width: 600px;
+      margin: auto;
+      height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
     #messages {
-      max-height: 400px;
+      flex-grow: 1;
       overflow-y: auto;
-      background: #f8f9fa;
+      background: #fff;
       padding: 1rem;
       border-radius: 0.5rem;
+      border: 1px solid #dee2e6;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .bubble {
+      max-width: 75%;
+      padding: 0.6rem 1rem;
+      border-radius: 1rem;
+      word-wrap: break-word;
+    }
+    .me { align-self: flex-end; background: #bee5eb; }
+    .other { align-self: flex-start; background: #e2e3e5; }
+    .timestamp {
+      font-size: 0.75rem;
+      color: #6c757d;
+      margin-top: 0.2rem;
+    }
+    .input-area {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
     }
   </style>
 </head>
 <body>
-  <div class="container py-4">
-    <h4>Tenant Group Chat</h4>
+  <div class="chat-container py-3">
+    <h4 class="text-center mb-3">Group Chat</h4>
+    <div id="messages"></div>
 
-    <!-- Messages -->
-    <div id="messages" class="mb-3"></div>
-
-    <!-- File Upload Form -->
-    <form id="uploadForm" enctype="multipart/form-data">
-      <input type="file" name="file" class="form-control mb-2" required>
-      <button type="submit" class="btn btn-secondary w-100 mb-3">📎 Upload File</button>
+    <form id="uploadForm" enctype="multipart/form-data" class="input-area">
+      <input type="file" name="file" class="form-control" required>
+      <button class="btn btn-outline-secondary" type="submit">📎</button>
     </form>
 
-    <!-- Text Message Form -->
-    <form id="chatForm">
-      <input type="text" id="messageInput" class="form-control mb-2" placeholder="Type a message..." autocomplete="off">
-      <emoji-picker id="emojiPicker" style="width: 100%; display: none;"></emoji-picker>
-<button class="btn btn-sm btn-light w-100 mb-3" type="button" onclick="toggleEmojiPicker()">😀 Emoji</button>
-      <button class="btn btn-primary w-100" type="submit">Send</button>
+    <form id="chatForm" class="input-area">
+      <input type="text" id="messageInput" class="form-control" placeholder="Type a message..." autocomplete="off">
+      <button class="btn btn-primary" type="submit">Send</button>
     </form>
   </div>
 
@@ -43,75 +66,53 @@
     const socket = io();
     const senderId = sessionStorage.getItem("userId");
     const propertyId = sessionStorage.getItem("propertyId");
+    const messages = document.getElementById("messages");
 
-    const messages = document.getElementById('messages');
+    socket.emit("joinGroup", { propertyId });
 
-    // Join group room
-    socket.emit('joinGroup', { propertyId });
-
-    // Load chat history
-    fetch('/group-messages?property=' + propertyId)
+    fetch("/group-messages?property=" + propertyId)
       .then(res => res.json())
       .then(data => {
         data.forEach(m => {
-          const div = document.createElement('div');
-          const isFile = m.content.includes('/uploads/');
-          div.innerHTML = isFile
-            ? `<strong>${m.sender === senderId ? 'You' : 'Tenant'}:</strong> <a href="${m.content}" target="_blank">📎 View File</a>`
-            : `<strong>${m.sender === senderId ? 'You' : 'Tenant'}:</strong> ${m.content}`;
-          messages.appendChild(div);
+          const role = m.sender === senderId ? "me" : "other";
+          appendMessage(role, m.content, m.timestamp);
         });
         messages.scrollTop = messages.scrollHeight;
       });
 
-    // Text message submit
-    document.getElementById('chatForm').addEventListener('submit', e => {
+    document.getElementById("chatForm").addEventListener("submit", e => {
       e.preventDefault();
-      const content = document.getElementById('messageInput').value;
+      const content = document.getElementById("messageInput").value;
       if (!content) return;
-      socket.emit('sendGroupMessage', { senderId, propertyId, content });
-      document.getElementById('messageInput').value = '';
+      socket.emit("sendGroupMessage", { senderId, propertyId, content });
+      document.getElementById("messageInput").value = "";
     });
 
-    // File upload
-    document.getElementById('uploadForm').addEventListener('submit', async e => {
+    document.getElementById("uploadForm").addEventListener("submit", async e => {
       e.preventDefault();
       const formData = new FormData(e.target);
-      formData.append('senderId', senderId);
-      formData.append('propertyId', propertyId);
-
-      const res = await fetch('/upload-file', {
-        method: 'POST',
+      formData.append("senderId", senderId);
+      formData.append("propertyId", propertyId);
+      const res = await fetch("/upload-file", {
+        method: "POST",
         body: formData
       });
-
-      if (res.ok) document.getElementById('uploadForm').reset();
+      if (res.ok) e.target.reset();
     });
 
-    // Display incoming messages
-    socket.on('newGroupMessage', data => {
-      const div = document.createElement('div');
-      const isFile = data.isFile || data.content.includes('/uploads/');
-      div.innerHTML = isFile
-        ? `<strong>${data.senderId === senderId ? 'You' : 'Tenant'}:</strong> <a href="${data.content}" target="_blank">📎 View File</a>`
-        : `<strong>${data.senderId === senderId ? 'You' : 'Tenant'}:</strong> ${data.content}`;
+    socket.on("newGroupMessage", data => {
+      const role = data.senderId === senderId ? "me" : "other";
+      const content = data.isFile ? `<a href="${data.content}" target="_blank">📎 View File</a>` : data.content;
+      appendMessage(role, content, data.timestamp);
+    });
+
+    function appendMessage(role, content, time) {
+      const div = document.createElement("div");
+      div.className = "bubble " + role;
+      div.innerHTML = content + '<div class="timestamp">' + new Date(time).toLocaleTimeString() + '</div>';
       messages.appendChild(div);
       messages.scrollTop = messages.scrollHeight;
-    });
-
-  const emojiPicker = document.getElementById('emojiPicker');
-  const messageInput = document.getElementById('messageInput');
-
-  function toggleEmojiPicker() {
-    emojiPicker.style.display = emojiPicker.style.display === 'none' ? 'block' : 'none';
-  }
-
-  emojiPicker.addEventListener('emoji-click', event => {
-    messageInput.value += event.detail.unicode;
-    emojiPicker.style.display = 'none';
-    messageInput.focus();
-  });
-
+    }
   </script>
 </body>
 </html>
