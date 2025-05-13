@@ -242,20 +242,31 @@ app.get('/chat', async (req, res) => {
   const peerName = peer ? peer.name || peer.phone : "No one";
 
   res.send(`
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Chat with ${peerName}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <script src="/socket.io/socket.io.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body {
-      background-color: #f1f2f6;
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #f1f2f6;
+    }
+    .chat-wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 600px;
+      margin: auto;
+      padding: 1rem;
     }
     #messages {
-      max-height: 65vh;
+      flex-grow: 1;
       overflow-y: auto;
       background: #fff;
       padding: 1rem;
@@ -269,7 +280,6 @@ app.get('/chat', async (req, res) => {
       max-width: 75%;
       padding: 0.6rem 1rem;
       border-radius: 1rem;
-      position: relative;
       word-wrap: break-word;
     }
     .me {
@@ -278,22 +288,28 @@ app.get('/chat', async (req, res) => {
     }
     .them {
       align-self: flex-start;
-      background: #e9ecef;
+      background: #e2e3e5;
     }
     .timestamp {
       font-size: 0.75rem;
       color: #6c757d;
       margin-top: 0.2rem;
     }
+    form {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
   </style>
 </head>
 <body>
-  <div class="container py-4">
-    <h4 class="mb-3">Chat with ${peerName}</h4>
-    <div id="messages" class="mb-3"></div>
+  <div class="chat-wrapper">
+    <h5 class="text-center mb-3">Chat with ${peerName}</h5>
+    <div id="messages"></div>
+
     <form id="chatForm">
-      <input type="text" id="messageInput" class="form-control mb-2" placeholder="Type your message..." autocomplete="off" />
-      <button type="submit" class="btn btn-primary w-100">Send</button>
+      <input type="text" id="messageInput" class="form-control" placeholder="Type a message..." autocomplete="off" />
+      <button type="submit" class="btn btn-primary">Send</button>
     </form>
   </div>
 
@@ -310,13 +326,15 @@ app.get('/chat', async (req, res) => {
       socket.emit("joinRoom", { userId: senderId, otherUserId: recipientId });
 
       fetch("/messages?with=" + recipientId)
-        .then((res) => res.json())
-        .then((data) => {
-          data.forEach((m) => appendMessage(m.sender === senderId ? "me" : "them", m.content, m.timestamp));
+        .then(res => res.json())
+        .then(data => {
+          data.forEach(m => {
+            appendMessage(m.sender === senderId ? "me" : "them", m.content, m.timestamp);
+          });
           messages.scrollTop = messages.scrollHeight;
         });
 
-      document.getElementById("chatForm").addEventListener("submit", (e) => {
+      document.getElementById("chatForm").addEventListener("submit", e => {
         e.preventDefault();
         const content = document.getElementById("messageInput").value;
         if (!content) return;
@@ -324,7 +342,7 @@ app.get('/chat', async (req, res) => {
         document.getElementById("messageInput").value = "";
       });
 
-      socket.on("newMessage", (data) => {
+      socket.on("newMessage", data => {
         appendMessage(data.senderId === senderId ? "me" : "them", data.content, new Date());
       });
 
@@ -333,13 +351,13 @@ app.get('/chat', async (req, res) => {
         div.className = "bubble " + role;
         div.innerHTML = content + '<div class="timestamp">' + new Date(time).toLocaleTimeString() + '</div>';
         messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
       }
     }
   </script>
 </body>
 </html>
-  `);
-});
+`);
 
 app.get('/messages', async (req, res) => {
   if (!req.session.userId) return res.status(401).json([]);
