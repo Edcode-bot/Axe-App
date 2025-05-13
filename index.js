@@ -243,101 +243,101 @@ app.get('/chat', async (req, res) => {
 
   res.send(`
     <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <title>Chat with ${peerName}</title>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-      <script src="/socket.io/socket.io.js"></script>
-      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-      <style>
-        body { background-color: #f0f2f5; }
-        #chatContainer {
-          max-width: 600px;
-          margin: auto;
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 0 10px rgba(0,0,0,0.1);
-          padding: 20px;
-        }
-        #messages {
-          max-height: 400px;
-          overflow-y: auto;
-          padding-bottom: 1rem;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-        .bubble {
-          padding: 10px 14px;
-          border-radius: 20px;
-          max-width: 75%;
-          word-wrap: break-word;
-        }
-        .me {
-          align-self: flex-end;
-          background-color: #d1e7dd;
-        }
-        .them {
-          align-self: flex-start;
-          background-color: #f1f0f0;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container py-4">
-        <div id="chatContainer">
-          <h5 class="mb-3">Chat with ${peerName}</h5>
-          <div id="messages"></div>
-          <form id="chatForm" class="mt-3">
-            <input type="text" id="messageInput" class="form-control mb-2" placeholder="Type a message..." autocomplete="off">
-            <button class="btn btn-primary w-100" type="submit">Send</button>
-          </form>
-        </div>
-      </div>
-      <script>
-        const socket = io();
-        const senderId = "${user._id}";
-        const recipientId = "${peer ? peer._id : ''}";
-        const messages = document.getElementById('messages');
-        if (!recipientId) {
-          document.getElementById('chatForm').remove();
-          messages.innerHTML = "<p>No chat recipient found.</p>";
-        } else {
-          socket.emit('joinRoom', { userId: senderId, otherUserId: recipientId });
-          fetch('/messages?with=' + recipientId)
-            .then(res => res.json())
-            .then(data => {
-              data.forEach(m => {
-                const div = document.createElement('div');
-                div.className = 'bubble ' + (m.sender === senderId ? 'me' : 'them');
-                div.innerHTML = m.content;
-                messages.appendChild(div);
-              });
-              messages.scrollTop = messages.scrollHeight;
-            });
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chat with ${peerName}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="/socket.io/socket.io.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f1f2f6;
+    }
+    #messages {
+      max-height: 65vh;
+      overflow-y: auto;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      border: 1px solid #dee2e6;
+    }
+    .bubble {
+      max-width: 75%;
+      padding: 0.6rem 1rem;
+      border-radius: 1rem;
+      position: relative;
+      word-wrap: break-word;
+    }
+    .me {
+      align-self: flex-end;
+      background: #d1e7dd;
+    }
+    .them {
+      align-self: flex-start;
+      background: #e9ecef;
+    }
+    .timestamp {
+      font-size: 0.75rem;
+      color: #6c757d;
+      margin-top: 0.2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <h4 class="mb-3">Chat with ${peerName}</h4>
+    <div id="messages" class="mb-3"></div>
+    <form id="chatForm">
+      <input type="text" id="messageInput" class="form-control mb-2" placeholder="Type your message..." autocomplete="off" />
+      <button type="submit" class="btn btn-primary w-100">Send</button>
+    </form>
+  </div>
 
-          const form = document.getElementById('chatForm');
-          const input = document.getElementById('messageInput');
-          form.addEventListener('submit', e => {
-            e.preventDefault();
-            const content = input.value;
-            if (!content) return;
-            socket.emit('sendMessage', { senderId, recipientId, content });
-            input.value = '';
-          });
+  <script>
+    const socket = io();
+    const senderId = "${user._id}";
+    const recipientId = "${peer ? peer._id : ''}";
+    const messages = document.getElementById("messages");
 
-          socket.on('newMessage', data => {
-            const div = document.createElement('div');
-            div.className = 'bubble ' + (data.senderId === senderId ? 'me' : 'them');
-            div.innerHTML = data.content;
-            messages.appendChild(div);
-            messages.scrollTop = messages.scrollHeight;
-          });
-        }
-      </script>
-    </body>
-    </html>
+    if (!recipientId) {
+      document.getElementById("chatForm").remove();
+      messages.innerHTML = "<p>No chat recipient found.</p>";
+    } else {
+      socket.emit("joinRoom", { userId: senderId, otherUserId: recipientId });
+
+      fetch("/messages?with=" + recipientId)
+        .then((res) => res.json())
+        .then((data) => {
+          data.forEach((m) => appendMessage(m.sender === senderId ? "me" : "them", m.content, m.timestamp));
+          messages.scrollTop = messages.scrollHeight;
+        });
+
+      document.getElementById("chatForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const content = document.getElementById("messageInput").value;
+        if (!content) return;
+        socket.emit("sendMessage", { senderId, recipientId, content });
+        document.getElementById("messageInput").value = "";
+      });
+
+      socket.on("newMessage", (data) => {
+        appendMessage(data.senderId === senderId ? "me" : "them", data.content, new Date());
+      });
+
+      function appendMessage(role, content, time) {
+        const div = document.createElement("div");
+        div.className = "bubble " + role;
+        div.innerHTML = content + '<div class="timestamp">' + new Date(time).toLocaleTimeString() + '</div>';
+        messages.appendChild(div);
+      }
+    }
+  </script>
+</body>
+</html>
   `);
 });
 
